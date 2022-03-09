@@ -5,9 +5,14 @@ use std::{
 	path::{Component, Path},
 };
 
-use proc_macro::{Span, TokenStream};
+use proc_macro::{Literal, Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, Ident};
+use syn::{
+	parse::{Parse, ParseStream},
+	parse_macro_input,
+	punctuated::Punctuated,
+	Ident, LitStr, Token,
+};
 use walkdir::WalkDir;
 
 #[proc_macro]
@@ -221,24 +226,35 @@ pub fn attach_datachunk(ast: TokenStream) -> TokenStream {
 
 #[proc_macro]
 pub fn attach_task(ast: TokenStream) -> TokenStream {
-	let data_name: Ident = parse_macro_input!(ast);
-	let fn_name: Ident = format_ident!("__custard_task__{}", data_name);
+	let names: LitStr = parse_macro_input!(ast);
+	let names_string = names.value();
+	let split_names: Vec<&str> = names_string.split(":").collect();
+	let task_impl = format_ident!("{}", split_names[0]);
+	let task_data = format_ident!("{}", split_names[1]);
+
+	let fn_name: Ident = format_ident!("__custard_task__{}", task_impl);
 	(quote! {
-		unsafe impl Send for #data_name {}
-		unsafe impl Sync for #data_name {}
 
 		#[no_mangle]
 		#[allow(non_snake_case)]
 		#[deny(warnings)]
 		pub extern "C" fn #fn_name(
 			from: Box<String>,
-		) -> Box<custard_use::dylib_management::safe_library::load_types::FFIResult<std::sync::Arc<dyn custard_use::user_types::task::Task + Send + Sync>, Box<dyn std::error::Error + Send + Sync>>> {
-			let created: Result<(#data_name), ron::Error> = ron::from_str(from.as_str());
+		) -> Box<custard_use::dylib_management::safe_library::load_types::FFIResult<custard_use::user_types::task::Task, Box<dyn std::error::Error + Send + Sync>>> {
+			let created: Result<(#task_data), ron::Error> = ron::from_str(from.as_str());
 
 
 			match created {
 				Ok(v) => {
-					return Box::new(custard_use::dylib_management::safe_library::load_types::FFIResult::Ok(std::sync::Arc::new(v)));
+					let task_data = std::sync::Arc::new(std::sync::Mutex::new(v));
+					return Box::new(custard_use::dylib_management::safe_library::load_types::FFIResult::Ok(
+						{
+							custard_use::user_types::task::Task {
+								task_data,
+								task_impl: std::sync::Arc::new(std::sync::Mutex::new((#task_impl)())),
+							}
+						}
+					));
 				}
 				Err(e) => {
 					return Box::new(custard_use::dylib_management::safe_library::load_types::FFIResult::Err(Box::new(e)));
@@ -248,6 +264,19 @@ pub fn attach_task(ast: TokenStream) -> TokenStream {
 
 		#[allow(unused)]
 		const __CUSTARD_MATCH_TYPE_TASK_LOAD_FN__: custard_use::dylib_management::safe_library::load_types::TaskLoadFn = #fn_name;
+	})
+	.into()
+}
+
+#[proc_macro]
+pub fn display_from_debug(ast: TokenStream) -> TokenStream {
+	let type_name: Ident = parse_macro_input!(ast);
+	(quote! {
+		impl std::fmt::Display for #type_name {
+			fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+				write!(f, "{:#?}", self)
+			}
+		}
 	})
 	.into()
 }
