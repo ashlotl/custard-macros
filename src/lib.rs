@@ -5,14 +5,9 @@ use std::{
 	path::{Component, Path},
 };
 
-use proc_macro::{Literal, Span, TokenStream};
+use proc_macro::{Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{
-	parse::{Parse, ParseStream},
-	parse_macro_input,
-	punctuated::Punctuated,
-	Ident, LitStr, Token,
-};
+use syn::{parse_macro_input, Ident, LitStr};
 use walkdir::WalkDir;
 
 #[proc_macro]
