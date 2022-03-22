@@ -241,12 +241,12 @@ pub fn attach_task(ast: TokenStream) -> TokenStream {
 
 			match created {
 				Ok(v) => {
-					let task_data = std::sync::Arc::new(std::sync::Mutex::new(v));
+					let task_data = std::sync::Arc::new(custard_use::concurrency::possibly_poisoned_mutex::PossiblyPoisonedMutex::new(std::sync::Mutex::new(v)));
 					return Box::new(custard_use::dylib_management::safe_library::load_types::FFIResult::Ok(
 						{
 							custard_use::user_types::task::Task {
 								task_data,
-								task_impl: std::sync::Arc::new(std::sync::Mutex::new((#task_impl)())),
+								task_impl: std::sync::Arc::new(custard_use::concurrency::possibly_poisoned_mutex::PossiblyPoisonedMutex::new(std::sync::Mutex::new((#task_impl)()))),
 							}
 						}
 					));
