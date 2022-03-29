@@ -221,13 +221,15 @@ pub fn attach_datachunk(ast: TokenStream) -> TokenStream {
 
 #[proc_macro]
 pub fn attach_task(ast: TokenStream) -> TokenStream {
-	let names: LitStr = parse_macro_input!(ast);
-	let names_string = names.value();
-	let split_names: Vec<&str> = names_string.split(":").collect();
-	let task_impl = format_ident!("{}", split_names[0]);
-	let task_data = format_ident!("{}", split_names[1]);
+	// let names: LitStr = parse_macro_input!(ast);
+	// let names_string = names.value();
+	// let split_names: Vec<&str> = names_string.split(":").collect();
+	// let task_impl = format_ident!("{}", split_names[0]);
+	// let task_data = format_ident!("{}", split_names[1]);
 
-	let fn_name: Ident = format_ident!("__custard_task__{}", task_impl);
+	let task: Ident = parse_macro_input!(ast);
+
+	let fn_name: Ident = format_ident!("__custard_task__{}", task);
 	(quote! {
 
 		#[no_mangle]
@@ -236,7 +238,7 @@ pub fn attach_task(ast: TokenStream) -> TokenStream {
 		pub extern "C" fn #fn_name(
 			from: Box<String>,
 		) -> Box<custard_use::dylib_management::safe_library::load_types::FFIResult<custard_use::user_types::task::Task, Box<dyn std::error::Error + Send + Sync>>> {
-			let created: Result<(#task_data), ron::Error> = ron::from_str(from.as_str());
+			let created: Result<(#task), ron::Error> = ron::from_str(from.as_str());
 
 
 			match created {
@@ -245,8 +247,7 @@ pub fn attach_task(ast: TokenStream) -> TokenStream {
 					return Box::new(custard_use::dylib_management::safe_library::load_types::FFIResult::Ok(
 						{
 							custard_use::user_types::task::Task {
-								task_data,
-								task_impl: std::sync::Arc::new(custard_use::concurrency::possibly_poisoned_mutex::PossiblyPoisonedMutex::new(std::sync::Mutex::new((#task_impl)()))),
+								inner: task_data,
 							}
 						}
 					));
