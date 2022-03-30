@@ -7,7 +7,7 @@ use std::{
 
 use proc_macro::{Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, Ident, LitStr};
+use syn::{parse_macro_input, Ident};
 use walkdir::WalkDir;
 
 #[proc_macro]
@@ -64,11 +64,7 @@ pub fn attach_unloaded_datachunk_getter(_ast: TokenStream) -> TokenStream {
 		contents_string.push_str(format!("(r#\"{}\"#,r#\"{}\"#),", entry.0, entry.1).as_str());
 	}
 
-	// panic!(contents_string);
-
 	let push_string = format!("const UNLOADED_DATACHUNKS: custard_use::utils::useful_statics::unloaded_static_array::UnloadedStaticArray<&'static str, &'static str, {}> = custard_use::utils::useful_statics::unloaded_static_array::UnloadedStaticArray {{ elems:[{}]}};", contents_len, contents_string);
-
-	// panic!(push_string);
 
 	let ret: TokenStream = format!(
 		"{}\n{}",
@@ -138,11 +134,7 @@ pub fn attach_unloaded_task_getter(_ast: TokenStream) -> TokenStream {
 		contents_string.push_str(format!("(r#\"{}\"#,r#\"{}\"#),", entry.0, entry.1).as_str());
 	}
 
-	// panic!(contents_string);
-
 	let push_string = format!("const UNLOADED_TASKS: custard_use::utils::useful_statics::unloaded_static_array::UnloadedStaticArray<&'static str, &'static str, {}> = custard_use::utils::useful_statics::unloaded_static_array::UnloadedStaticArray {{ elems:[{}]}};", contents_len, contents_string);
-
-	// panic!(push_string);
 
 	let ret: TokenStream = format!(
 		"{}\n{}",
@@ -192,20 +184,19 @@ pub fn attach_datachunk(ast: TokenStream) -> TokenStream {
 	let fn_name: Ident = format_ident!("__custard_datachunk__{}", data_name);
 	(quote! {
 		unsafe impl Send for #data_name {}
-		unsafe impl Sync for #data_name {}
 
 		#[no_mangle]
 		#[allow(non_snake_case)]
 		#[deny(warnings)]
 		pub extern "C" fn #fn_name(
 			from: Box<String>,
-		) -> Box<custard_use::dylib_management::safe_library::load_types::FFIResult<Box<dyn custard_use::user_types::datachunk::Datachunk>, Box<dyn std::error::Error>>> {
+		) -> Box<custard_use::dylib_management::safe_library::load_types::FFIResult<custard_use::user_types::datachunk::DatachunkObject, Box<dyn std::error::Error>>> {
 			let created: Result<(#data_name), ron::Error> = ron::from_str(from.as_str());
 
 
 			match created {
 				Ok(v) => {
-					return Box::new(custard_use::dylib_management::safe_library::load_types::FFIResult::Ok(Box::new(v)));
+					return Box::new(custard_use::dylib_management::safe_library::load_types::FFIResult::Ok(custard_use::utils::mutable_arc::MutableArc::new(std::sync::Arc::new(v))));
 				}
 				Err(e) => {
 					return Box::new(custard_use::dylib_management::safe_library::load_types::FFIResult::Err(Box::new(e)));
@@ -221,12 +212,6 @@ pub fn attach_datachunk(ast: TokenStream) -> TokenStream {
 
 #[proc_macro]
 pub fn attach_task(ast: TokenStream) -> TokenStream {
-	// let names: LitStr = parse_macro_input!(ast);
-	// let names_string = names.value();
-	// let split_names: Vec<&str> = names_string.split(":").collect();
-	// let task_impl = format_ident!("{}", split_names[0]);
-	// let task_data = format_ident!("{}", split_names[1]);
-
 	let task: Ident = parse_macro_input!(ast);
 
 	let fn_name: Ident = format_ident!("__custard_task__{}", task);
@@ -237,7 +222,7 @@ pub fn attach_task(ast: TokenStream) -> TokenStream {
 		#[deny(warnings)]
 		pub extern "C" fn #fn_name(
 			from: Box<String>,
-		) -> Box<custard_use::dylib_management::safe_library::load_types::FFIResult<custard_use::user_types::task::Task, Box<dyn std::error::Error + Send + Sync>>> {
+		) -> Box<custard_use::dylib_management::safe_library::load_types::FFIResult<custard_use::user_types::task::TaskObject, Box<dyn std::error::Error + Send + Sync>>> {
 			let created: Result<(#task), ron::Error> = ron::from_str(from.as_str());
 
 
@@ -245,11 +230,7 @@ pub fn attach_task(ast: TokenStream) -> TokenStream {
 				Ok(v) => {
 					let task_data = std::sync::Arc::new(custard_use::concurrency::possibly_poisoned_mutex::PossiblyPoisonedMutex::new(std::sync::Mutex::new(v)));
 					return Box::new(custard_use::dylib_management::safe_library::load_types::FFIResult::Ok(
-						{
-							custard_use::user_types::task::Task {
-								inner: task_data,
-							}
-						}
+						task_data
 					));
 				}
 				Err(e) => {
